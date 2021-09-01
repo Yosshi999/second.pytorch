@@ -710,7 +710,7 @@ def do_eval_v3(gt_annos,
             )
             for i in range(len(gt_annos)):
                 _, _, _, _, _, det_results = compute_statistics_jit(
-                    overlaps,
+                    overlaps[i],
                     gt_datas_list[i],
                     dt_datas_list[i],
                     ignored_gts[i],
