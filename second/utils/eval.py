@@ -719,9 +719,7 @@ def do_eval_v3(gt_annos,
                     metric=2,
                     min_overlap=0.7,
                     thresh=0.0,
-                    compute_fp=True,
-                    return_det_results=True
-                )
+                    compute_fp=True)
                 dt_annos[i][f"official/3d_0.70/{l}"] = det_results
                 assert len(dt_annos[i]["bbox"]) == len(det_results)
 
