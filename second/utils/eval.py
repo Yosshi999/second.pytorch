@@ -189,8 +189,7 @@ def compute_statistics_jit(overlaps,
                            min_overlap,
                            thresh=0,
                            compute_fp=False,
-                           compute_aos=False,
-                           return_det_results=False):
+                           compute_aos=False):
 
     det_size = dt_datas.shape[0]
     gt_size = gt_datas.shape[0]
@@ -303,9 +302,7 @@ def compute_statistics_jit(overlaps,
             else:
                 similarity = -1
 
-    if return_det_results:
-        return tp, fp, fn, similarity, thresholds[:thresh_idx], det_results
-    return tp, fp, fn, similarity, thresholds[:thresh_idx]
+    return tp, fp, fn, similarity, thresholds[:thresh_idx], det_results
 
 
 def get_split_parts(num, num_part):
@@ -345,7 +342,7 @@ def fused_compute_statistics(overlaps,
             ignored_gt = ignored_gts[gt_num:gt_num + gt_nums[i]]
             ignored_det = ignored_dets[dt_num:dt_num + dt_nums[i]]
             dontcare = dontcares[dc_num:dc_num + dc_nums[i]]
-            tp, fp, fn, similarity, _ = compute_statistics_jit(
+            tp, fp, fn, similarity, *_ = compute_statistics_jit(
                 overlap,
                 gt_data,
                 dt_data,
@@ -550,7 +547,7 @@ def eval_class_v3(gt_annos,
                         min_overlap=min_overlap,
                         thresh=0.0,
                         compute_fp=False)
-                    tp, fp, fn, similarity, thresholds = rets
+                    tp, fp, fn, similarity, thresholds, _ = rets
                     thresholdss += thresholds.tolist()
                 thresholdss = np.array(thresholdss)
                 thresholds = get_thresholds(thresholdss, total_num_valid_gt)
