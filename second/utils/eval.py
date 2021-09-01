@@ -709,7 +709,7 @@ def do_eval_v3(gt_annos,
                 gt_annos, dt_annos, current_classes[0], difficulty
             )
             for i in range(len(gt_annos)):
-                _, _, _, _, _, det_results = compute_statistics_jit(
+                tp, fp, _, _, _, det_results = compute_statistics_jit(
                     overlaps[i],
                     gt_datas_list[i],
                     dt_datas_list[i],
@@ -720,7 +720,9 @@ def do_eval_v3(gt_annos,
                     min_overlap=0.7,
                     thresh=0.0,
                     compute_fp=True)
-                dt_annos[i][f"official/3d_0.70/{l}"] = det_results
+                dt_annos[i][f"official/3d_0.70/{l}/bin"] = det_results
+                dt_annos[i][f"official/3d_0.70/{l}/tp"] = tp
+                dt_annos[i][f"official/3d_0.70/{l}/fp"] = fp
                 assert len(dt_annos[i]["bbox"]) == len(det_results)
 
     return metrics
