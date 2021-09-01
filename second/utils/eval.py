@@ -342,7 +342,7 @@ def fused_compute_statistics(overlaps,
             ignored_gt = ignored_gts[gt_num:gt_num + gt_nums[i]]
             ignored_det = ignored_dets[dt_num:dt_num + dt_nums[i]]
             dontcare = dontcares[dc_num:dc_num + dc_nums[i]]
-            tp, fp, fn, similarity, *_ = compute_statistics_jit(
+            tp, fp, fn, similarity, _, _ = compute_statistics_jit(
                 overlap,
                 gt_data,
                 dt_data,
@@ -709,7 +709,7 @@ def do_eval_v3(gt_annos,
                 gt_annos, dt_annos, current_classes[0], difficulty
             )
             for i in range(len(gt_annos)):
-                *_, det_results = compute_statistics_jit(
+                _, _, _, _, _, det_results = compute_statistics_jit(
                     overlaps,
                     gt_datas_list[i],
                     dt_datas_list[i],
