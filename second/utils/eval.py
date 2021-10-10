@@ -720,6 +720,7 @@ def do_eval_v3(gt_annos,
                     min_overlap=0.7,
                     thresh=0.0,
                     compute_fp=True)
+                dt_annos[i][f"official/overlaps"] = overlaps[i]
                 dt_annos[i][f"official/3d_0.70/{l}/bin"] = det_results
                 dt_annos[i][f"official/3d_0.70/{l}/tp"] = tp
                 dt_annos[i][f"official/3d_0.70/{l}/fp"] = fp

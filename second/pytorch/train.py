@@ -545,6 +545,8 @@ def evaluate(config_path,
             print(v)
         with open(result_path_step / "result_kitti.pkl", 'wb') as f:
             pickle.dump(result_dict["result_kitti"], f)
+        with open(result_path_step / "result_evaluation.pkl", 'wb') as f:
+            pickle.dump(result_dict["results"], f)
 
 def helper_tune_target_assigner(config_path, target_rate=None, update_freq=200, update_delta=0.01, num_tune_epoch=5):
     """get information of target assign to tune thresholds in anchor generator.
