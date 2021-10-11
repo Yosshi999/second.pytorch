@@ -150,19 +150,20 @@ class KittiDataset(Dataset):
             z_center=z_center)
         
         # feature extraction
-        for info, det in tqdm(zip(self._kitti_infos, dt_annos), desc="feature"):
+        for info, det in tqdm(zip(self._kitti_infos, dt_annos), desc="feature", total=len(dt_annos)):
             pc_info = info["point_cloud"]
             image_info = info["image"]
             calib = info["calib"]
 
             num_features = pc_info["num_features"]
             v_path = str(self._root_path / pc_info["velodyne_path"])
+            v_path = v_path.parent.parent / (v_path.parent.stem + "_reduced") / v_path.name
             points_v = np.fromfile(
                 v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
             rect = calib['R0_rect']
             Trv2c = calib['Tr_velo_to_cam']
             P2 = calib['P2']
-            if True: # remove outside image-rect
+            if False: # No longer you need remove outside image-rect (*_reduced pointcloud is already filtered.)
                 points_v = box_np_ops.remove_outside_points(
                     points_v, rect, Trv2c, P2, image_info["image_shape"])
 
