@@ -156,8 +156,8 @@ class KittiDataset(Dataset):
             calib = info["calib"]
 
             num_features = pc_info["num_features"]
-            v_path = str(self._root_path / pc_info["velodyne_path"])
-            v_path = v_path.parent.parent / (v_path.parent.stem + "_reduced") / v_path.name
+            v_path = self._root_path / pc_info["velodyne_path"]
+            v_path = str(v_path.parent.parent / (v_path.parent.stem + "_reduced") / v_path.name)
             points_v = np.fromfile(
                 v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
             rect = calib['R0_rect']
