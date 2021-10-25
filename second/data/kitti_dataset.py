@@ -32,9 +32,12 @@ class KittiDataset(Dataset):
         print("remain number of infos:", len(self._kitti_infos))
         self._class_names = class_names
         self._prep_func = prep_func
-        self.remove_outside_points = prep_func.keywords["remove_outside_points"]
-        if self.remove_outside_points:
-            prep_func.keywords["remove_outside_points"] = False
+        if prep_func is None:
+            self.remove_outside_points = True
+        else:
+            self.remove_outside_points = prep_func.keywords["remove_outside_points"]
+            if self.remove_outside_points:
+                prep_func.keywords["remove_outside_points"] = False
 
     def __len__(self):
         return len(self._kitti_infos)
