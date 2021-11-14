@@ -211,22 +211,47 @@ class WeightedSmoothL1LocalizationAndVonMisesLossWithUncertainty(WeightedSmoothL
       loss: a float tensor of shape [batch_size, num_anchors] tensor
         representing the value of the loss function.
     """
-    diff = torch.cat([
-      prediction_tensor[..., :6] - target_tensor[..., :6],
-      1.0 - torch.cos(prediction_tensor[..., 6:7] - target_tensor[..., 6:7]),
-      prediction_tensor[..., 7:] - target_tensor[..., 7:]
-    ], dim=-1)
+    # regression (loc and dim) loss
+    diff = prediction_tensor[..., :6] - target_tensor[..., :6]
     abs_diff = torch.abs(diff)
     if self._code_weights is not None:
-      code_weights = self._code_weights.type_as(prediction_tensor).to(target_tensor.device)
+      code_weights = self._code_weights[:6].type_as(prediction_tensor).to(target_tensor.device)
       abs_diff = code_weights.view(1, 1, -1) * abs_diff
     abs_diff_lt_1 = torch.le(abs_diff, 1 / (self._sigma**2)).type_as(abs_diff)
-    loss = abs_diff_lt_1 * 0.5 * torch.pow(abs_diff * self._sigma, 2) \
+    regloss = abs_diff_lt_1 * 0.5 * torch.pow(abs_diff * self._sigma, 2) \
       + (abs_diff - 0.5 / (self._sigma**2)) * (1. - abs_diff_lt_1)
 
+    # rotation loss
+    if prediction_tensor.shape[-1] == 8:
+      # direction is encoded to cartesian
+      target_cart = torch.cat([torch.cos(target_tensor[..., 6:7]), torch.sin(target_tensor[..., 6:7])], dim=-1)
+      rotdiff = prediction_tensor[..., 6:8] - target_cart
+      abs_diff = torch.abs(rotdiff)
+    elif prediction_tensor.shape[-1] == 7:
+      rotdiff = 1.0 - torch.cos(prediction_tensor[..., 6:7] - target_tensor[..., 6:7])
+      abs_diff = rotdiff
+    else:
+      raise
+    if self._code_weights is not None:
+      code_weights = self._code_weights[6:7].type_as(prediction_tensor).to(target_tensor.device)
+      abs_diff = code_weights.view(1, 1, -1) * abs_diff
+    abs_diff_lt_1 = torch.le(abs_diff, 1 / (self._sigma**2)).type_as(abs_diff)
+    rotloss = abs_diff_lt_1 * 0.5 * torch.pow(abs_diff * self._sigma, 2) \
+      + (abs_diff - 0.5 / (self._sigma**2)) * (1. - abs_diff_lt_1)
+    rotloss = rotloss.sum(dim=-1, keepdims=True)
+
+    loss = torch.cat([regloss, rotloss], dim=-1)
     # add uncertainty loss: 1 / sigma^2 * Loss + 1/2 * log(sigma^2) + 1/2 * log(2pi)
     invvars = torch.exp(-logvars)
-    uncloss = 0.5 * logvars
+
+    if prediction_tensor.shape[-1] == 8:
+      # direction is encoded to cartesian
+      r0_sq = prediction_tensor[..., 6:7] ** 2 + prediction_tensor[..., 7:8] ** 2
+      uncloss = 0.5 * torch.cat([logvars[..., :6], logvars[..., 6:7] - 0.5*torch.log(r0_sq + 1e-7)], dim=-1)
+    elif prediction_tensor.shape[-1] == 7:
+      uncloss = 0.5 * logvars
+    else:
+      raise
 
     # von Mises
     # m = invvars[..., 6:7]

@@ -346,6 +346,7 @@ class RPNBase(RPNNoHeadBase):
                  use_direction_classifier=True,
                  use_groupnorm=False,
                  estimate_box_logvariance=False,
+                 encode_direction_as_cartesian=False,
                  num_groups=32,
                  box_code_size=7,
                  num_direction_bins=2,
@@ -376,6 +377,7 @@ class RPNBase(RPNNoHeadBase):
         self._use_direction_classifier = use_direction_classifier
         self._estimate_box_logvariance = estimate_box_logvariance
         self._box_code_size = box_code_size
+        self._encode_direction_as_cartesian = encode_direction_as_cartesian
 
         if encode_background_as_zeros:
             num_cls = num_anchor_per_loc * num_class
@@ -386,8 +388,12 @@ class RPNBase(RPNNoHeadBase):
         else:
             final_num_filters = sum(num_upsample_filters)
         self.conv_cls = nn.Conv2d(final_num_filters, num_cls, 1)
-        self.conv_box = nn.Conv2d(final_num_filters,
-                                  num_anchor_per_loc * box_code_size, 1)
+        if encode_direction_as_cartesian:
+            self.conv_box = nn.Conv2d(final_num_filters,
+                                    num_anchor_per_loc * (box_code_size + 1), 1)
+        else:
+            self.conv_box = nn.Conv2d(final_num_filters,
+                                    num_anchor_per_loc * box_code_size, 1)
         if use_direction_classifier:
             self.conv_dir_cls = nn.Conv2d(
                 final_num_filters, num_anchor_per_loc * num_direction_bins, 1)
@@ -402,9 +408,14 @@ class RPNBase(RPNNoHeadBase):
         cls_preds = self.conv_cls(x)
         # [N, C, y(H), x(W)]
         C, H, W = box_preds.shape[1:]
-        box_preds = box_preds.view(-1, self._num_anchor_per_loc,
-                                   self._box_code_size, H, W).permute(
-                                       0, 1, 3, 4, 2).contiguous()
+        if self._encode_direction_as_cartesian:
+            box_preds = box_preds.view(-1, self._num_anchor_per_loc,
+                                    self._box_code_size + 1, H, W).permute(
+                                        0, 1, 3, 4, 2).contiguous()
+        else:
+            box_preds = box_preds.view(-1, self._num_anchor_per_loc,
+                                    self._box_code_size, H, W).permute(
+                                        0, 1, 3, 4, 2).contiguous()
         cls_preds = cls_preds.view(-1, self._num_anchor_per_loc,
                                    self._num_class, H, W).permute(
                                        0, 1, 3, 4, 2).contiguous()

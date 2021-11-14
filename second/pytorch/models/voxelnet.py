@@ -79,6 +79,7 @@ class VoxelNet(nn.Module):
                  num_groups=32,
                  use_direction_classifier=True,
                  estimate_box_logvariance=False,
+                 encode_direction_as_cartesian=False,
                  use_sigmoid_score=False,
                  encode_background_as_zeros=True,
                  use_rotate_nms=True,
@@ -120,6 +121,7 @@ class VoxelNet(nn.Module):
         self._encode_background_as_zeros = encode_background_as_zeros
         self._use_direction_classifier = use_direction_classifier
         self._estimate_box_logvariance = estimate_box_logvariance
+        self._encode_direction_as_cartesian = encode_direction_as_cartesian
         self._num_input_features = num_input_features
         self._box_coder = target_assigner.box_coder
         self.target_assigner = target_assigner
@@ -168,6 +170,7 @@ class VoxelNet(nn.Module):
             encode_background_as_zeros=encode_background_as_zeros,
             use_direction_classifier=use_direction_classifier,
             estimate_box_logvariance=estimate_box_logvariance,
+            encode_direction_as_cartesian=encode_direction_as_cartesian,
             use_groupnorm=use_groupnorm,
             num_groups=num_groups,
             box_code_size=target_assigner.box_coder.code_size,
@@ -277,7 +280,6 @@ class VoxelNet(nn.Module):
             num_class=self._num_class,
             encode_rad_error_by_sin=self._encode_rad_error_by_sin,
             encode_background_as_zeros=self._encode_background_as_zeros,
-            box_code_size=box_code_size,
             sin_error_factor=self._sin_error_factor,
             num_direction_bins=self._num_direction_bins,
         )
@@ -320,6 +322,9 @@ class VoxelNet(nn.Module):
             res["dir_loss_reduced"] = dir_loss
         if self._estimate_box_logvariance:
             # This assumes that reg_weights has shape (B, num_anchors)
+            if self._encode_direction_as_cartesian:
+                r0_sq = box_preds[..., 6:7] ** 2 + box_preds[..., 7:8] ** 2
+                box_logvar_preds[..., 6:7] -= 0.5*torch.log(r0_sq + 1e-7)
             box_vars_weighted = (
                 torch.exp(box_logvar_preds).view(batch_size_dev, -1, box_code_size) *
                 reg_weights.unsqueeze(-1)
@@ -386,7 +391,10 @@ class VoxelNet(nn.Module):
         # coors: [num_voxels, 4]
         preds_dict = self.network_forward(voxels, num_points, coors, batch_size_dev)
         # need to check size.
-        box_preds = preds_dict["box_preds"].view(batch_size_dev, -1, self._box_coder.code_size)
+        if self._encode_direction_as_cartesian:
+            box_preds = preds_dict["box_preds"].view(batch_size_dev, -1, self._box_coder.code_size + 1)
+        else:
+            box_preds = preds_dict["box_preds"].view(batch_size_dev, -1, self._box_coder.code_size)
         err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
         assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
         if self.training:
@@ -424,7 +432,10 @@ class VoxelNet(nn.Module):
             batch_anchors_mask = example["anchors_mask"].view(batch_size, -1)
 
         t = time.time()
-        batch_box_preds = preds_dict["box_preds"]
+        if self._encode_direction_as_cartesian:
+            batch_box_preds = decode_cartesian_to_direction(preds_dict["box_preds"])
+        else:
+            batch_box_preds = preds_dict["box_preds"]
         batch_cls_preds = preds_dict["cls_preds"]
         batch_box_preds = batch_box_preds.view(batch_size, -1,
                                                self._box_coder.code_size)
@@ -749,6 +760,12 @@ def add_sin_difference(boxes1, boxes2, boxes1_rot, boxes2_rot, factor=1.0):
                        dim=-1)
     return boxes1, boxes2
 
+def decode_cartesian_to_direction(boxes):
+    cartX = boxes[..., 6]
+    cartY = boxes[..., 7]
+    direction = torch.atan2(cartY, cartX)
+    return torch.cat([boxes[..., :6], direction[..., None]], dim=-1)
+
 
 def create_loss(loc_loss_ftor,
                 cls_loss_ftor,
@@ -763,16 +780,15 @@ def create_loss(loc_loss_ftor,
                 encode_background_as_zeros=True,
                 encode_rad_error_by_sin=True,
                 sin_error_factor=1.0,
-                box_code_size=7,
                 num_direction_bins=2):
     batch_size = int(box_preds.shape[0])
-    box_preds = box_preds.view(batch_size, -1, box_code_size)
+    box_preds = torch.flatten(box_preds, 1, -2)
     if encode_background_as_zeros:
         cls_preds = cls_preds.view(batch_size, -1, num_class)
     else:
         cls_preds = cls_preds.view(batch_size, -1, num_class + 1)
     if box_logvar_preds is not None:
-        box_logvar_preds = box_logvar_preds.view(batch_size, -1, box_code_size)
+        box_logvar_preds = torch.flatten(box_logvar_preds, 1, -2)
     cls_targets = cls_targets.squeeze(-1)
     one_hot_targets = torchplus.nn.one_hot(
         cls_targets, depth=num_class + 1, dtype=box_preds.dtype)
